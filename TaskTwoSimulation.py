@@ -22,21 +22,78 @@ class Simulation:
         self.obstacles = []
         self.currentPos = (0, 0, Direction.TOP)
 
+        # Add hover effect state management
+        self.hovered_button = None
+        self.last_mouse_pos = (0, 0)
+        self.hover_animation_time = 0
+        self.last_click_time = 0
+        self.click_delay = 300  # Minimum delay between clicks (ms)
+
         pygame.mouse.set_visible(1)
-        pygame.display.set_caption("Vroom Vroom Simulation")
+        pygame.display.set_caption("Vroom Vroom Simulation - Enhanced")
         self.screen.fill(constants.BLACK)
 
     def reset(self, bot):
         """Reset the simulation to initial state."""
+        print("Resetting Task 2 simulation...")
         self.screen.fill(constants.BLACK)
-        current_pos = bot.get_current_pos()
-        self.currentPos = (
-            (constants.GRID_LENGTH - constants.GRID_CELL_LENGTH - current_pos.x) // 10,
-            current_pos.y // 10,
-            current_pos.direction,
-        )
-        self.bot.set_position_task2(self.currentPos[0], self.currentPos[1], self.currentPos[2])
-        self.bot.hamiltonian.commands.clear()
+
+        # Set robot to proper starting position (bottom-left area of Task 2 grid)
+        # Task 2 grid is 400x150, so 40x15 cells - start near bottom-left
+        start_world_x = 370  # World units from left
+        start_world_y = 70  # World units from bottom
+        start_direction = Direction.TOP
+
+        print(f"Resetting robot to world position: ({start_world_x}, {start_world_y})")
+
+        # Convert to display coordinates for current position tracking
+        start_grid_x = start_world_x // 10  # Convert to grid cells (37)
+        start_grid_y = start_world_y // 10  # Convert to grid cells (7)
+
+        print(f"Resetting robot to grid position: ({start_grid_x}, {start_grid_y})")
+
+        # Set the display position
+        self.currentPos = (start_grid_x, start_grid_y, start_direction)
+
+        # Set the bot's actual position using Task 2 method
+        self.bot.set_position_task2(start_grid_x, start_grid_y, start_direction)
+
+        # Clear any existing commands
+        if hasattr(self.bot, 'hamiltonian') and hasattr(self.bot.hamiltonian, 'commands'):
+            self.bot.hamiltonian.commands.clear()
+            print("Cleared command queue")
+
+        print(f"Task 2 reset complete - Position: {self.currentPos}")
+
+    def _get_hover_color(self, base_color, hover_intensity=0.3):
+        """Generate a lighter version of a color for hover effects"""
+        return tuple(min(255, int(c + (255 - c) * hover_intensity)) for c in base_color)
+
+    def _draw_glow_effect(self, rect, color, intensity=2):
+        """Create a glowing border effect around a rectangle"""
+        for i in range(intensity):
+            glow_rect = pygame.Rect(rect.x - i * 2, rect.y - i * 2,
+                                    rect.width + i * 4, rect.height + i * 4)
+            pygame.draw.rect(self.screen, color, glow_rect, max(1, 2 - i))
+
+    def _check_button_hover(self, mouse_x, mouse_y):
+        """Check which button is being hovered over"""
+        button_width = constants.BUTTON_LENGTH
+        button_height = constants.BUTTON_WIDTH
+        button_x = 650
+
+        # Define button areas
+        buttons = [
+            ("start", button_x, 500),
+            ("reset", button_x, 450),
+            ("coordinates", button_x, 550)
+        ]
+
+        for button_name, x, y in buttons:
+            if (x <= mouse_x <= x + button_width and y <= mouse_y <= y + button_height):
+                return button_name
+
+        return None
 
     def _draw_cell(self, x, y, cell_size, color, border_width=2):
         """Draw a single cell at the specified grid position."""
@@ -94,15 +151,62 @@ class Simulation:
                 rect = pygame.Rect(y, x, cell_size, cell_size)
                 pygame.draw.rect(self.screen, constants.WHITE, rect, 2)
 
-    def drawButtons(self, x_pos, y_pos, bg_color, text, text_color, length, width):
-        """Draw UI buttons."""
-        button = pygame.Rect(x_pos, y_pos, length, width)
-        pygame.draw.rect(self.screen, bg_color, button)
+    def drawEnhancedButtons(self, x_pos, y_pos, bg_color, text, text_color, length, width,
+                            is_hovered=False, button_type="normal"):
+        """Draw UI buttons with hover effects."""
+        # Determine button appearance based on hover state
+        if is_hovered:
+            # Enhanced hover colors
+            if button_type == "start":
+                hover_bg = self._get_hover_color(bg_color, 0.4)
+                border_color = constants.WHITE
+            elif button_type == "reset":
+                hover_bg = self._get_hover_color(bg_color, 0.3)
+                border_color = constants.WHITE
+            else:
+                hover_bg = self._get_hover_color(bg_color, 0.2)
+                border_color = constants.YELLOW
+        else:
+            hover_bg = bg_color
+            border_color = constants.BLACK
 
-        text_surface = self.font.render(text, True, text_color)
+        button_rect = pygame.Rect(x_pos, y_pos, length, width)
+
+        # Add glow effect for hovered buttons
+        if is_hovered:
+            self._draw_glow_effect(button_rect, hover_bg)
+
+        # Draw main button
+        pygame.draw.rect(self.screen, hover_bg, button_rect)
+
+        # Enhanced border
+        border_width = 4 if is_hovered else 2
+        pygame.draw.rect(self.screen, border_color, button_rect, border_width)
+
+        # Add subtle shadow effect
+        if is_hovered:
+            shadow_rect = pygame.Rect(x_pos + 2, y_pos + 2, length, width)
+            pygame.draw.rect(self.screen, (50, 50, 50), shadow_rect, 1)
+
+        # Enhanced text rendering
+        font_to_use = self.font
+        if is_hovered and button_type in ["start", "reset"]:
+            # Make text slightly larger on hover for interactive buttons
+            font_to_use = pygame.font.SysFont("Arial", 27)
+
+        text_surface = font_to_use.render(text, True, text_color)
         text_rect = text_surface.get_rect(
-            center=(button.x + (length // 2), button.y + (width // 2))
+            center=(x_pos + (length // 2), y_pos + (width // 2))
         )
+
+        # Add text shadow for better readability on hover
+        if is_hovered:
+            shadow_surface = font_to_use.render(text, True, (0, 0, 0))
+            shadow_rect = text_rect.copy()
+            shadow_rect.x += 1
+            shadow_rect.y += 1
+            self.screen.blit(shadow_surface, shadow_rect)
+
         self.screen.blit(text_surface, text_rect)
 
     def _draw_wall_section(self, x, y, x_length, y_length, size, color):
@@ -121,7 +225,7 @@ class Simulation:
         # Draw obstacles
         for i, obstacle in enumerate(obstacles[:2]):  # Only handle first 2 obstacles
             y = (constants.TASK2_LENGTH - (
-                        constants.GRID_CELL_LENGTH * 5 + obstacle.position.y)) // constants.GRID_CELL_LENGTH
+                    constants.GRID_CELL_LENGTH * 5 + obstacle.position.y)) // constants.GRID_CELL_LENGTH
             x = obstacle.position.x // constants.GRID_CELL_LENGTH
 
             self._draw_cell(y, x, size, constants.YELLOW)
@@ -135,7 +239,7 @@ class Simulation:
         if len(obstacles) >= 2:
             obstacle = obstacles[0]  # Use first obstacle for wall positioning
             y = (constants.TASK2_LENGTH - (
-                        constants.GRID_CELL_LENGTH * 5 + obstacle.position.y)) // constants.GRID_CELL_LENGTH
+                    constants.GRID_CELL_LENGTH * 5 + obstacle.position.y)) // constants.GRID_CELL_LENGTH
             x = obstacle.position.x // constants.GRID_CELL_LENGTH
 
             # Draw various wall sections
@@ -155,7 +259,7 @@ class Simulation:
         for x, y in check_positions:
             for obstacle in self.obstacles:
                 obstacle_y = (
-                                         constants.TASK2_LENGTH - constants.GRID_CELL_LENGTH * 5 - obstacle.position.y) // constants.GRID_CELL_LENGTH
+                                     constants.TASK2_LENGTH - constants.GRID_CELL_LENGTH * 5 - obstacle.position.y) // constants.GRID_CELL_LENGTH
                 obstacle_x = obstacle.position.x // constants.GRID_CELL_LENGTH
                 if x == obstacle_y and y == obstacle_x:
                     print("COLLISION!")
@@ -347,18 +451,38 @@ class Simulation:
         return self._execute_diagonal_move('southwest', cell_size)
 
     def draw(self, x, y):
-        """Draw UI elements."""
-        # Start button
-        self.drawButtons(650, 500, constants.GREEN, "START!", constants.BLACK,
-                         constants.BUTTON_LENGTH, constants.BUTTON_WIDTH)
+        """Draw UI elements with enhanced hover effects."""
+        # Update hover state
+        self.hovered_button = self._check_button_hover(x, y)
+        self.hover_animation_time = pygame.time.get_ticks() / 1000.0
 
-        # Current cursor coordinates
-        self.drawButtons(650, 550, constants.BLACK, f"({x}, {y})", constants.WHITE,
-                         constants.BUTTON_LENGTH, constants.BUTTON_WIDTH)
+        # Enhanced Start button with hover
+        is_start_hovered = (self.hovered_button == "start")
+        start_color = constants.GREEN
+        if is_start_hovered:
+            # Add pulsing effect
+            import math
+            pulse = abs(math.sin(self.hover_animation_time * 3)) * 0.2 + 0.8
+            start_color = tuple(int(c * pulse) for c in constants.GREEN)
 
-        # Reset button
-        self.drawButtons(650, 450, constants.GREY, "RESET", constants.BLACK,
-                         constants.BUTTON_LENGTH, constants.BUTTON_WIDTH)
+        self.drawEnhancedButtons(650, 500, start_color, "START!", constants.BLACK,
+                                 constants.BUTTON_LENGTH, constants.BUTTON_WIDTH,
+                                 is_start_hovered, "start")
+
+        # Enhanced coordinates display with hover
+        is_coord_hovered = (self.hovered_button == "coordinates")
+        coord_bg = constants.DARK_GRAY if is_coord_hovered else constants.BLACK
+        coord_text = constants.YELLOW if is_coord_hovered else constants.WHITE
+
+        self.drawEnhancedButtons(650, 550, coord_bg, f"({x}, {y})", coord_text,
+                                 constants.BUTTON_LENGTH, constants.BUTTON_WIDTH,
+                                 is_coord_hovered, "coordinates")
+
+        # Enhanced Reset button with hover
+        is_reset_hovered = (self.hovered_button == "reset")
+        self.drawEnhancedButtons(650, 450, constants.GREY, "RESET", constants.BLACK,
+                                 constants.BUTTON_LENGTH, constants.BUTTON_WIDTH,
+                                 is_reset_hovered, "reset")
 
         # Draw obstacles
         self.drawObstacles(self.obstacles, constants.RED)
@@ -630,6 +754,10 @@ class Simulation:
         while True:
             self.updatingTask2Display()
             x, y = pygame.mouse.get_pos()
+
+            # Store last mouse position for animations
+            self.last_mouse_pos = (x, y)
+
             self.draw(x, y)
 
             for event in pygame.event.get():
@@ -648,7 +776,15 @@ class Simulation:
             pygame.display.update()
 
     def _handle_mouse_clicks(self, x, y, bot):
-        """Handle mouse click events."""
+        """Handle mouse click events with click delay protection."""
+        current_time = pygame.time.get_ticks()
+
+        # Prevent rapid clicking
+        if current_time - self.last_click_time < self.click_delay:
+            return
+
+        self.last_click_time = current_time
+
         button_bounds = (650, 650 + constants.BUTTON_LENGTH)
 
         if button_bounds[0] < x < button_bounds[1]:
@@ -656,4 +792,5 @@ class Simulation:
                 print("START BUTTON IS CLICKED!!! I REPEAT, START BUTTON IS CLICKED!!!")
                 self.task2Algo(self.direction)
             elif 450 < y < 450 + constants.BUTTON_WIDTH:
+                print("RESET BUTTON CLICKED!")
                 self.reset(bot)
