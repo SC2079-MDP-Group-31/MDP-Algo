@@ -37,7 +37,7 @@ class Simulation:
         self.drawGridBackground()
 
     def reset(self, bot):
-        """Reset the simulation to initial state"""
+        """Reset the simulation to initial state - robot back to bottom-left corner"""
         print("Resetting simulation...")
         
         # Stop any current execution
@@ -50,7 +50,7 @@ class Simulation:
 
         # Reset robot to initial starting position (bottom-left corner)
         # Starting position in world coordinates
-        start_world_x = 10  # 1 cell from left edge
+        start_world_x = 180  # 1 cell from left edge
         start_world_y = 10  # 1 cell from bottom edge
         start_direction = Direction.TOP
         
@@ -58,17 +58,14 @@ class Simulation:
         
         # Update the robot's actual position
         if hasattr(self.bot, 'set_position'):
-            # Convert world coordinates to grid coordinates for robot
             grid_x = start_world_x // 10
             grid_y = start_world_y // 10
             self.bot.set_position(grid_x, grid_y, start_direction)
             print(f"Bot position set to grid: ({grid_x}, {grid_y})")
-        
-        # Update the display position (this is what's shown on screen)
-        # Convert to display coordinates
-        display_x = (constants.GRID_LENGTH - constants.GRID_CELL_LENGTH - start_world_y) // 10
-        display_y = start_world_x // 10
-        
+
+        # Update the display position
+        display_x = grid_x
+        display_y = grid_y
         self.currentPos = (display_x, display_y, start_direction)
         print(f"Display position set to: {self.currentPos}")
 
