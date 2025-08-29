@@ -3,6 +3,7 @@
 import sys
 import time
 from copy import deepcopy
+import math
 
 import pygame
 import pygame.freetype
@@ -25,11 +26,17 @@ class Simulation:
         self.bot = None
         self.obstacles = []
         self.currentPos = (0, 0, Direction.TOP)
-        
+
         # Add state management for buttons
         self.is_executing = False  # Prevent multiple START clicks
-        self.last_click_time = 0   # Prevent rapid clicking
-        self.click_delay = 500     # Minimum delay between clicks (ms)
+        self.last_click_time = 0  # Prevent rapid clicking
+        self.click_delay = 500  # Minimum delay between clicks (ms)
+
+        # Hover effect state management
+        self.hovered_button = None
+        self.hovered_movement = None
+        self.hover_animation_time = 0
+        self.last_mouse_pos = (0, 0)
 
         pygame.mouse.set_visible(True)
         pygame.display.set_caption("MDP 34 GRAND PRIX SIMULATOR")
@@ -39,10 +46,10 @@ class Simulation:
     def reset(self, bot):
         """Reset the simulation to initial state - robot back to bottom-left corner"""
         print("Resetting simulation...")
-        
+
         # Stop any current execution
         self.is_executing = False
-        
+
         # Clear the screen and redraw background
         self.screen.fill(constants.DEEP_BLUE)
         self.drawGridBackground()
@@ -53,9 +60,9 @@ class Simulation:
         start_world_x = 180  # 1 cell from left edge
         start_world_y = 10  # 1 cell from bottom edge
         start_direction = Direction.TOP
-        
+
         print(f"Resetting robot to world position: ({start_world_x}, {start_world_y})")
-        
+
         # Update the robot's actual position
         if hasattr(self.bot, 'set_position'):
             grid_x = start_world_x // 10
@@ -73,19 +80,19 @@ class Simulation:
         if hasattr(self.bot, 'hamiltonian') and hasattr(self.bot.hamiltonian, 'commands'):
             self.bot.hamiltonian.commands.clear()
             print("Cleared command queue")
-            
+
         # Clear any path planning results
         if hasattr(self.bot.hamiltonian, 'simple_hamiltonian'):
             self.bot.hamiltonian.simple_hamiltonian = tuple()
             print("Cleared hamiltonian path")
-        
+
         # Redraw the robot at the starting position
-        self.drawRobot(self.currentPos, 
+        self.drawRobot(self.currentPos,
                        constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR,
                        constants.RED, constants.BLUE, constants.LIGHT_BLUE)
-        
+
         print(f"Robot reset complete - Position: {self.currentPos}")
-        
+
         # Force a display update
         pygame.display.update()
 
@@ -165,21 +172,76 @@ class Simulation:
                 rect = pygame.Rect(y, x, cell_size, cell_size)
                 pygame.draw.rect(self.screen, constants.BLACK, rect, 1)
 
-    def drawButtons(self, xpos, ypos, bgcolor, text, textColor, length, width):
-        """Draw a button with text"""
-        button_rect = pygame.Rect(xpos, ypos, length, width)
-        pygame.draw.rect(self.screen, bgcolor, button_rect)
+    def _get_hover_color(self, base_color, hover_intensity=0.3):
+        """Generate a lighter version of a color for hover effects"""
+        return tuple(min(255, int(c + (255 - c) * hover_intensity)) for c in base_color)
 
-        text_surface = self.font.render(text, True, textColor)
-        text_rect = text_surface.get_rect(
-            center=(button_rect.x + length // 2, button_rect.y + width // 2)
-        )
+    def _get_glow_effect(self, rect, color, intensity=20):
+        """Create a glowing border effect around a rectangle"""
+        for i in range(3):
+            glow_rect = pygame.Rect(rect.x - i, rect.y - i, rect.width + 2 * i, rect.height + 2 * i)
+            glow_color = (*color, max(50 - i * 15, 10))
+            pygame.draw.rect(self.screen, color, glow_rect, 2)
+
+    def drawButtons(self, xpos, ypos, bgcolor, text, textColor, length, width, is_hovered=False, is_disabled=False):
+        """Draw a button with text and hover effects"""
+        # Determine button colors based on state
+        if is_disabled:
+            bg_color = (100, 100, 100)
+            text_color = (150, 150, 150)
+            border_color = (80, 80, 80)
+        elif is_hovered:
+            bg_color = self._get_hover_color(bgcolor, 0.4)
+            text_color = textColor
+            border_color = constants.WHITE
+        else:
+            bg_color = bgcolor
+            text_color = textColor
+            border_color = constants.BLACK
+
+        # Create button rectangle
+        button_rect = pygame.Rect(xpos, ypos, length, width)
+
+        # Add glow effect for hovered buttons
+        if is_hovered and not is_disabled:
+            self._get_glow_effect(button_rect, bg_color)
+
+        # Draw main button
+        pygame.draw.rect(self.screen, bg_color, button_rect)
+
+        # Draw border with appropriate thickness
+        border_width = 4 if is_hovered else 3
+        pygame.draw.rect(self.screen, border_color, button_rect, border_width)
+
+        # Add subtle shadow effect
+        if not is_disabled:
+            shadow_rect = pygame.Rect(xpos + 2, ypos + 2, length, width)
+            pygame.draw.rect(self.screen, (50, 50, 50), shadow_rect, 2)
+
+        # Draw text
+        text_surface = self.font.render(text, True, text_color)
+        text_rect = text_surface.get_rect(center=(xpos + length // 2, ypos + width // 2))
         self.screen.blit(text_surface, text_rect)
 
-    def drawImage(self, image, xpos, ypos, bgcolor, length, width):
-        """Draw an image centered in a rectangle"""
-        rect = image.get_rect()
-        rect.center = (xpos + length // 2, ypos + width // 2)
+    def drawImage(self, image, xpos, ypos, bgcolor, length, width, is_hovered=False):
+        """Draw an image centered in a rectangle with hover effects"""
+        # Create background rectangle
+        bg_rect = pygame.Rect(xpos, ypos, length, width)
+
+        # Apply hover effects
+        if is_hovered:
+            hover_color = self._get_hover_color(bgcolor, 0.3)
+            pygame.draw.rect(self.screen, hover_color, bg_rect)
+            pygame.draw.rect(self.screen, constants.WHITE, bg_rect, 3)
+            # Add a subtle scale effect by adjusting image position
+            scale_offset = 2
+            rect = image.get_rect()
+            rect.center = (xpos + length // 2 - scale_offset, ypos + width // 2 - scale_offset)
+        else:
+            pygame.draw.rect(self.screen, bgcolor, bg_rect)
+            rect = image.get_rect()
+            rect.center = (xpos + length // 2, ypos + width // 2)
+
         self.screen.blit(image, rect)
 
     def _drawObstacleDirection(self, x, y, direction, color, size):
@@ -196,8 +258,51 @@ class Simulation:
             self.screen.fill(color, rect)
             pygame.draw.rect(self.screen, color, rect, 5)
 
+    def _check_button_hover(self, mouse_x, mouse_y):
+        """Check which button is being hovered over"""
+        button_width = 140
+        button_height = 45
+        button_x = 630
+        button_spacing = 60
+
+        # Check main control buttons
+        buttons = [
+            ("start", button_x, 300),
+            ("reset", button_x, 300 + button_spacing),
+            ("draw_path", button_x, 300 + button_spacing * 2)
+        ]
+
+        for button_name, x, y in buttons:
+            if (x <= mouse_x <= x + button_width and y <= mouse_y <= y + button_height):
+                return button_name
+
+        return None
+
+    def _check_movement_hover(self, mouse_x, mouse_y):
+        """Check which movement control is being hovered over"""
+        movement_buttons = [
+            ("forward", 685, 110),
+            ("backward", 685, 180),
+            ("turn_right", 720, 132.5),
+            ("turn_left", 650, 132.5),
+            ("reverse_right", 720, 160),
+            ("reverse_left", 650, 160),
+            ("northeast", 720, 107.5),
+            ("northwest", 650, 107.5),
+            ("southeast", 720, 182.5),
+            ("southwest", 650, 182.5)
+        ]
+
+        button_size = constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR
+
+        for button_name, x, y in movement_buttons:
+            if (x <= mouse_x <= x + button_size and y <= mouse_y <= y + button_size):
+                return button_name
+
+        return None
+
     def drawObstaclesButton(self, obstacles, color):
-        """Draw obstacles and control images"""
+        """Draw obstacles and control images with hover effects"""
         size = constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR
 
         # Draw obstacles
@@ -209,26 +314,32 @@ class Simulation:
             self.selectObstacles(x, y, size, constants.GOLD)
             self._drawObstacleDirection(x, y, direction, color, size)
 
-        # Draw control images
+        # Draw control images with hover effects
         control_images = [
-            ("images/MoveForward.png", 685, 110),
-            ("images/MoveBackward.png", 685, 180),
-            ("images/TurnForwardRight.png", 720, 132.5),
-            ("images/TurnForwardLeft.png", 650, 132.5),
-            ("images/TurnReverseRight.png", 720, 160),
-            ("images/TurnReverseLeft.png", 650, 160),
-            ("images/slantForwardRight.png", 720, 107.5),
-            ("images/slantForwardLeft.png", 650, 107.5),
-            ("images/slantBackwardsRight.png", 720, 182.5),
-            ("images/slantBackwardsLeft.png", 650, 182.5)
+            ("images/MoveForward.png", 685, 110, "forward"),
+            ("images/MoveBackward.png", 685, 180, "backward"),
+            ("images/TurnForwardRight.png", 720, 132.5, "turn_right"),
+            ("images/TurnForwardLeft.png", 650, 132.5, "turn_left"),
+            ("images/TurnReverseRight.png", 720, 160, "reverse_right"),
+            ("images/TurnReverseLeft.png", 650, 160, "reverse_left"),
+            ("images/slantForwardRight.png", 720, 107.5, "northeast"),
+            ("images/slantForwardLeft.png", 650, 107.5, "northwest"),
+            ("images/slantBackwardsRight.png", 720, 182.5, "southeast"),
+            ("images/slantBackwardsLeft.png", 650, 182.5, "southwest")
         ]
 
-        for image_path, x_pos, y_pos in control_images:
+        for image_path, x_pos, y_pos, button_name in control_images:
             try:
                 img = pygame.image.load(image_path).convert()
-                self.drawImage(img, x_pos, y_pos, constants.GREY, size, size)
+                is_hovered = (self.hovered_movement == button_name)
+                self.drawImage(img, x_pos, y_pos, constants.GREY, size, size, is_hovered)
             except pygame.error:
-                pass  # Skip if image not found
+                # Draw a placeholder rectangle if image not found
+                is_hovered = (self.hovered_movement == button_name)
+                bg_color = constants.LIGHT_BLUE if is_hovered else constants.GREY
+                rect = pygame.Rect(x_pos, y_pos, size, size)
+                pygame.draw.rect(self.screen, bg_color, rect)
+                pygame.draw.rect(self.screen, constants.BLACK, rect, 2)
 
     def _checkBounds(self, new_x, new_y, gridSize, cellSize):
         """Check if new position is within grid bounds"""
@@ -424,34 +535,44 @@ class Simulation:
                 break
 
     def draw(self, x, y):
-        """Draw all UI elements"""
+        """Draw all UI elements with hover effects"""
+        # Update hover states
+        self.hovered_button = self._check_button_hover(x, y)
+        self.hovered_movement = self._check_movement_hover(x, y)
+
+        # Update animation timer for subtle effects
+        self.hover_animation_time = pygame.time.get_ticks() / 1000.0
+
         # Improved button layout with better spacing and colors
-        button_width = 140  # Wider buttons
-        button_height = 45  # Taller buttons
-        button_x = 630     # Slightly left position
-        button_spacing = 60 # More space between buttons
-        
+        button_width = 140
+        button_height = 45
+        button_x = 630
+        button_spacing = 60
+
         # Change START button color based on execution state
-        start_color = (34, 139, 34) if not self.is_executing else (100, 100, 100)  # Grey when executing
+        start_color = (34, 139, 34) if not self.is_executing else (100, 100, 100)
         start_text = "START!" if not self.is_executing else "RUNNING..."
-        
+        start_disabled = self.is_executing
+
+        # Button specifications with hover states
         button_specs = [
-            (button_x, 300, start_color, start_text, constants.WHITE),
-            (button_x, 300 + button_spacing, (220, 20, 60), "RESET", constants.WHITE),  # Crimson red
-            (button_x, 300 + button_spacing * 2, (70, 130, 180), "DRAW PATH", constants.WHITE)  # Steel blue
+            ("start", button_x, 300, start_color, start_text, constants.WHITE, start_disabled),
+            ("reset", button_x, 300 + button_spacing, (220, 20, 60), "RESET", constants.WHITE, False),
+            ("draw_path", button_x, 300 + button_spacing * 2, (70, 130, 180), "DRAW PATH", constants.WHITE, False)
         ]
 
-        for x_pos, y_pos, bg_color, text, text_color in button_specs:
-            # Draw button with border
-            button_rect = pygame.Rect(x_pos, y_pos, button_width, button_height)
-            pygame.draw.rect(self.screen, bg_color, button_rect)
-            pygame.draw.rect(self.screen, constants.BLACK, button_rect, 3)  # Black border
-            
-            # Draw text with better font
-            text_surface = self.font.render(text, True, text_color)
-            text_rect = text_surface.get_rect(center=button_rect.center)
-            self.screen.blit(text_surface, text_rect)
+        for button_name, x_pos, y_pos, bg_color, text, text_color, is_disabled in button_specs:
+            is_hovered = (self.hovered_button == button_name and not is_disabled)
 
+            # Add pulsing effect for START button when ready
+            if button_name == "start" and not is_disabled and is_hovered:
+                pulse = abs(math.sin(self.hover_animation_time * 3)) * 0.2 + 0.8
+                bg_color = tuple(int(c * pulse) for c in bg_color)
+
+            self.drawButtons(x_pos, y_pos, bg_color, text, text_color,
+                             button_width, button_height, is_hovered, is_disabled)
+
+        # Draw obstacles and movement controls with hover effects
         obstacles_to_draw = self.obstacles if self.obstacles else []
         self.drawObstaclesButton(obstacles_to_draw, constants.RED)
 
@@ -478,16 +599,21 @@ class Simulation:
                 (y * constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR) + half_cell
             ))
 
-        # Draw path lines
+        # Draw path lines with animated effect
         for i in range(1, len(path_points)):
             print(f"Drawing line from {path_points[i - 1]} to {path_points[i]}")
             self.updatingDisplay()
-            pygame.draw.lines(self.screen, constants.RED, True,
-                              [path_points[i - 1], path_points[i]], 3)
+
+            # Draw thicker line with glow effect
+            for thickness in range(5, 0, -1):
+                alpha = 255 - (5 - thickness) * 40
+                color = (*constants.RED, alpha)
+                pygame.draw.lines(self.screen, constants.RED, False,
+                                  [path_points[i - 1], path_points[i]], thickness)
             pygame.display.update()
 
     def updateTime(self, startTime, currentTime):
-        """Update the timer display"""
+        """Update the timer display with improved styling"""
         if not startTime:
             return
 
@@ -495,16 +621,20 @@ class Simulation:
         timer_x = 630
         timer_y = 480
         timer_width = 140
-        timer_height = 30
-        
+        timer_height = 35
+
         rect = pygame.Rect(timer_x, timer_y, timer_width, timer_height)
-        self.screen.fill(constants.DEEP_BLUE, rect)
-        pygame.draw.rect(self.screen, constants.BLACK, rect, 2)
+
+        # Add subtle gradient background
+        pygame.draw.rect(self.screen, constants.DEEP_BLUE, rect)
+        pygame.draw.rect(self.screen, constants.DARK_BLUE,
+                         pygame.Rect(timer_x, timer_y, timer_width, timer_height // 2))
+        pygame.draw.rect(self.screen, constants.WHITE, rect, 2)
 
         elapsed_time = currentTime - startTime
         timer_text = f"Time: {elapsed_time:.1f}s"
-        
-        # Draw timer with smaller font
+
+        # Draw timer with improved font
         timer_font = pygame.font.Font("fonts/Formula1-Regular.ttf", 16)
         text_surface = timer_font.render(timer_text, True, constants.WHITE)
         text_rect = text_surface.get_rect(center=rect.center)
@@ -578,13 +708,13 @@ class Simulation:
     def _handleMouseClick(self, x, y, start_time_ref):
         """Handle mouse click events"""
         current_time = pygame.time.get_ticks()
-        
+
         # Prevent rapid clicking
         if current_time - self.last_click_time < self.click_delay:
             return
-            
+
         self.last_click_time = current_time
-        
+
         button_width = 140
         button_height = 45
         button_x = 630
@@ -595,7 +725,7 @@ class Simulation:
             if not self.is_executing:  # Only allow if not currently executing
                 print("START BUTTON IS CLICKED!!! I REPEAT, START BUTTON IS CLICKED!!!")
                 self.is_executing = True
-                
+
                 try:
                     # Plan the path
                     self.bot.hamiltonian.plan_path()
@@ -612,13 +742,13 @@ class Simulation:
                             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                                 self.is_executing = False
                                 return
-                        
+
                         if not self.is_executing:  # Stop if execution was cancelled
                             break
-                            
+
                         self.parseCmd(cmd, start_time_ref[0])
                         pygame.display.update()
-                        
+
                 except Exception as e:
                     print(f"Error during execution: {e}")
                 finally:
@@ -626,21 +756,22 @@ class Simulation:
             else:
                 print("Already executing! Please wait or press RESET to stop.")
 
-        # Reset button - FIX: Make sure this actually resets the position
-        elif (button_x < x < button_x + button_width) and (300 + button_spacing < y < 300 + button_spacing + button_height):
+        # Reset button
+        elif (button_x < x < button_x + button_width) and (
+                300 + button_spacing < y < 300 + button_spacing + button_height):
             print("RESET BUTTON CLICKED!")
             self.is_executing = False  # Stop any current execution
-            
+
             # Clear the old robot from display first
             if hasattr(self, 'currentPos'):
-                self.drawRobot(self.currentPos, 
-                              constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR,
-                              constants.GREY, constants.GREY, constants.GREY)
-            
+                self.drawRobot(self.currentPos,
+                               constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR,
+                               constants.GREY, constants.GREY, constants.GREY)
+
             # Reset everything
             self.reset(self.bot)
             start_time_ref[0] = None  # Reset timer
-            
+
             print("Reset complete!")
 
         # Movement area
@@ -650,7 +781,8 @@ class Simulation:
                 self.movement(x, y, constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR, 25)
 
         # Draw shortest path button
-        elif (button_x < x < button_x + button_width) and (300 + button_spacing * 2 < y < 300 + button_spacing * 2 + button_height):
+        elif (button_x < x < button_x + button_width) and (
+                300 + button_spacing * 2 < y < 300 + button_spacing * 2 + button_height):
             if not self.is_executing:  # Only allow when not executing
                 self.drawShortestPath(self.bot)
 
@@ -662,11 +794,11 @@ class Simulation:
                 print("Execution stopped by user (ESC)")
                 self.is_executing = False
             return
-            
+
         # Only allow manual movement when not executing
         if self.is_executing:
             return
-            
+
         keys = pygame.key.get_pressed()
         grid_size = constants.GRID_LENGTH * constants.SCALING_FACTOR
         cell_size = constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR
@@ -705,6 +837,10 @@ class Simulation:
         while True:
             self.updatingDisplay()
             x, y = pygame.mouse.get_pos()
+
+            # Store last mouse position for smooth animations
+            self.last_mouse_pos = (x, y)
+
             self.draw(x, y)
 
             for event in pygame.event.get():
