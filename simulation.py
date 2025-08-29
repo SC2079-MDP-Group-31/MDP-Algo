@@ -25,6 +25,11 @@ class Simulation:
         self.bot = None
         self.obstacles = []
         self.currentPos = (0, 0, Direction.TOP)
+        
+        # Add state management for buttons
+        self.is_executing = False  # Prevent multiple START clicks
+        self.last_click_time = 0   # Prevent rapid clicking
+        self.click_delay = 500     # Minimum delay between clicks (ms)
 
         pygame.mouse.set_visible(True)
         pygame.display.set_caption("MDP 34 GRAND PRIX SIMULATOR")
@@ -32,23 +37,57 @@ class Simulation:
         self.drawGridBackground()
 
     def reset(self, bot):
-        """Reset the simulation to initial state"""
+        """Reset the simulation to initial state - robot back to bottom-left corner"""
+        print("Resetting simulation...")
+        
+        # Stop any current execution
+        self.is_executing = False
+        
+        # Clear the screen and redraw background
         self.screen.fill(constants.DEEP_BLUE)
         self.drawGridBackground()
+        self.drawGrid()
 
-        current_pos = bot.get_current_pos()
-        currentPosX = current_pos.x
-        currentPosY = current_pos.y
-        direction = current_pos.direction
+        # Reset robot to initial starting position (bottom-left corner)
+        # Starting position in world coordinates
+        start_world_x = 180  # 1 cell from left edge
+        start_world_y = 10  # 1 cell from bottom edge
+        start_direction = Direction.TOP
+        
+        print(f"Resetting robot to world position: ({start_world_x}, {start_world_y})")
+        
+        # Update the robot's actual position
+        if hasattr(self.bot, 'set_position'):
+            grid_x = start_world_x // 10
+            grid_y = start_world_y // 10
+            self.bot.set_position(grid_x, grid_y, start_direction)
+            print(f"Bot position set to grid: ({grid_x}, {grid_y})")
 
-        new_pos = (
-            (constants.GRID_LENGTH - constants.GRID_CELL_LENGTH - currentPosX) // 10,
-            currentPosY // 10,
-            direction,
-        )
+        # Update the display position
+        display_x = grid_x
+        display_y = grid_y
+        self.currentPos = (display_x, display_y, start_direction)
+        print(f"Display position set to: {self.currentPos}")
 
-        self.bot.set_position(new_pos[0], new_pos[1], new_pos[2])
-        self.bot.hamiltonian.commands.clear()
+        # Clear all commands
+        if hasattr(self.bot, 'hamiltonian') and hasattr(self.bot.hamiltonian, 'commands'):
+            self.bot.hamiltonian.commands.clear()
+            print("Cleared command queue")
+            
+        # Clear any path planning results
+        if hasattr(self.bot.hamiltonian, 'simple_hamiltonian'):
+            self.bot.hamiltonian.simple_hamiltonian = tuple()
+            print("Cleared hamiltonian path")
+        
+        # Redraw the robot at the starting position
+        self.drawRobot(self.currentPos, 
+                       constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR,
+                       constants.RED, constants.BLUE, constants.LIGHT_BLUE)
+        
+        print(f"Robot reset complete - Position: {self.currentPos}")
+        
+        # Force a display update
+        pygame.display.update()
 
     def selectObstacles(self, y, x, cellSize, color):
         """Draw a single obstacle cell"""
@@ -386,15 +425,32 @@ class Simulation:
 
     def draw(self, x, y):
         """Draw all UI elements"""
+        # Improved button layout with better spacing and colors
+        button_width = 140  # Wider buttons
+        button_height = 45  # Taller buttons
+        button_x = 630     # Slightly left position
+        button_spacing = 60 # More space between buttons
+        
+        # Change START button color based on execution state
+        start_color = (34, 139, 34) if not self.is_executing else (100, 100, 100)  # Grey when executing
+        start_text = "START!" if not self.is_executing else "RUNNING..."
+        
         button_specs = [
-            (650, 500, constants.GREEN, "START!", constants.BLACK),
-            (650, 400, constants.BLACK, "RESET", constants.WHITE),
-            (650, 550, constants.BLACK, "DRAW", constants.WHITE)
+            (button_x, 300, start_color, start_text, constants.WHITE),
+            (button_x, 300 + button_spacing, (220, 20, 60), "RESET", constants.WHITE),  # Crimson red
+            (button_x, 300 + button_spacing * 2, (70, 130, 180), "DRAW PATH", constants.WHITE)  # Steel blue
         ]
 
         for x_pos, y_pos, bg_color, text, text_color in button_specs:
-            self.drawButtons(x_pos, y_pos, bg_color, text, text_color,
-                             constants.BUTTON_LENGTH, constants.BUTTON_WIDTH)
+            # Draw button with border
+            button_rect = pygame.Rect(x_pos, y_pos, button_width, button_height)
+            pygame.draw.rect(self.screen, bg_color, button_rect)
+            pygame.draw.rect(self.screen, constants.BLACK, button_rect, 3)  # Black border
+            
+            # Draw text with better font
+            text_surface = self.font.render(text, True, text_color)
+            text_rect = text_surface.get_rect(center=button_rect.center)
+            self.screen.blit(text_surface, text_rect)
 
         obstacles_to_draw = self.obstacles if self.obstacles else []
         self.drawObstaclesButton(obstacles_to_draw, constants.RED)
@@ -435,13 +491,24 @@ class Simulation:
         if not startTime:
             return
 
-        rect = pygame.Rect(620, 350, constants.BUTTON_LENGTH * 2, constants.BUTTON_WIDTH)
+        # Position timer below the buttons
+        timer_x = 630
+        timer_y = 480
+        timer_width = 140
+        timer_height = 30
+        
+        rect = pygame.Rect(timer_x, timer_y, timer_width, timer_height)
         self.screen.fill(constants.DEEP_BLUE, rect)
-        pygame.draw.rect(self.screen, constants.DEEP_BLUE, rect, 2)
+        pygame.draw.rect(self.screen, constants.BLACK, rect, 2)
 
         elapsed_time = currentTime - startTime
-        self.drawButtons(650, 350, constants.DEEP_BLUE, f"({elapsed_time:.2f} Seconds)",
-                         constants.BLACK, constants.BUTTON_LENGTH, constants.BUTTON_WIDTH)
+        timer_text = f"Time: {elapsed_time:.1f}s"
+        
+        # Draw timer with smaller font
+        timer_font = pygame.font.Font("fonts/Formula1-Regular.ttf", 16)
+        text_surface = timer_font.render(timer_text, True, constants.WHITE)
+        text_rect = text_surface.get_rect(center=rect.center)
+        self.screen.blit(text_surface, text_rect)
 
     def updatingDisplay(self, start=None):
         """Update the display with current state"""
@@ -510,35 +577,96 @@ class Simulation:
 
     def _handleMouseClick(self, x, y, start_time_ref):
         """Handle mouse click events"""
-        button_length = constants.BUTTON_LENGTH
-        button_width = constants.BUTTON_WIDTH
+        current_time = pygame.time.get_ticks()
+        
+        # Prevent rapid clicking
+        if current_time - self.last_click_time < self.click_delay:
+            return
+            
+        self.last_click_time = current_time
+        
+        button_width = 140
+        button_height = 45
+        button_x = 630
+        button_spacing = 60
 
         # Start button
-        if (650 < x < 650 + button_length) and (500 < y < 500 + button_width):
-            print("START BUTTON IS CLICKED!!! I REPEAT, START BUTTON IS CLICKED!!!")
-            self.bot.hamiltonian.plan_path()
-            start_time_ref[0] = time.time()
-            self.updateTime(start_time_ref[0], start_time_ref[0])
+        if (button_x < x < button_x + button_width) and (300 < y < 300 + button_height):
+            if not self.is_executing:  # Only allow if not currently executing
+                print("START BUTTON IS CLICKED!!! I REPEAT, START BUTTON IS CLICKED!!!")
+                self.is_executing = True
+                
+                try:
+                    # Plan the path
+                    self.bot.hamiltonian.plan_path()
+                    start_time_ref[0] = time.time()
+                    self.updateTime(start_time_ref[0], start_time_ref[0])
 
-            for cmd in self.bot.hamiltonian.commands:
-                self.parseCmd(cmd, start_time_ref[0])
-                pygame.display.update()
+                    # Execute commands
+                    for cmd in self.bot.hamiltonian.commands:
+                        # Check if user wants to stop (ESC key or window close)
+                        for event in pygame.event.get():
+                            if event.type == pygame.QUIT:
+                                pygame.quit()
+                                sys.exit()
+                            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                                self.is_executing = False
+                                return
+                        
+                        if not self.is_executing:  # Stop if execution was cancelled
+                            break
+                            
+                        self.parseCmd(cmd, start_time_ref[0])
+                        pygame.display.update()
+                        
+                except Exception as e:
+                    print(f"Error during execution: {e}")
+                finally:
+                    self.is_executing = False  # Always reset execution state
+            else:
+                print("Already executing! Please wait or press RESET to stop.")
 
-        # Reset button
-        elif (650 < x < 650 + button_length) and (400 < y < 400 + button_width):
+        # Reset button - FIX: Make sure this actually resets the position
+        elif (button_x < x < button_x + button_width) and (300 + button_spacing < y < 300 + button_spacing + button_height):
+            print("RESET BUTTON CLICKED!")
+            self.is_executing = False  # Stop any current execution
+            
+            # Clear the old robot from display first
+            if hasattr(self, 'currentPos'):
+                self.drawRobot(self.currentPos, 
+                              constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR,
+                              constants.GREY, constants.GREY, constants.GREY)
+            
+            # Reset everything
             self.reset(self.bot)
+            start_time_ref[0] = None  # Reset timer
+            
+            print("Reset complete!")
 
         # Movement area
         elif (650 < x < 720 + constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR and
               115 < y < 185 + constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR):
-            self.movement(x, y, constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR, 25)
+            if not self.is_executing:  # Only allow manual movement when not executing
+                self.movement(x, y, constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR, 25)
 
         # Draw shortest path button
-        elif (650 < x < 650 + button_length) and (550 < y < 560 + button_width):
-            self.drawShortestPath(self.bot)
+        elif (button_x < x < button_x + button_width) and (300 + button_spacing * 2 < y < 300 + button_spacing * 2 + button_height):
+            if not self.is_executing:  # Only allow when not executing
+                self.drawShortestPath(self.bot)
 
     def _handleKeyDown(self, event):
         """Handle keyboard input"""
+        # Add ESC key to stop execution
+        if event.key == pygame.K_ESCAPE:
+            if self.is_executing:
+                print("Execution stopped by user (ESC)")
+                self.is_executing = False
+            return
+            
+        # Only allow manual movement when not executing
+        if self.is_executing:
+            return
+            
         keys = pygame.key.get_pressed()
         grid_size = constants.GRID_LENGTH * constants.SCALING_FACTOR
         cell_size = constants.GRID_CELL_LENGTH * constants.SCALING_FACTOR
