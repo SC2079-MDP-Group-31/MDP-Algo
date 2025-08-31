@@ -1,5 +1,3 @@
-# Cleaned
-
 from enum import Enum
 
 

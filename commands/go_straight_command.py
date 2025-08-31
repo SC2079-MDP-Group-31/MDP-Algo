@@ -1,5 +1,3 @@
-# Cleaned
-
 import constants
 from commands.command import Command
 from misc.direction import Direction

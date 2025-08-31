@@ -1,5 +1,3 @@
-# Cleaned
-
 import math
 from typing import List
 import pygame

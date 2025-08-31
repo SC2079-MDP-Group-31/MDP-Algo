@@ -1,5 +1,3 @@
-# Cleaned
-
 import pygame
 import pygame.freetype
 import constants

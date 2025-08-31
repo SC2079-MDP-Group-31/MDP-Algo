@@ -1,5 +1,3 @@
-# Cleaned
-
 import socket
 
 from misc.direction import Direction

@@ -1,9 +1,6 @@
-# Cleaned
-
-import math
 import random
 from collections import deque
-from typing import Tuple, List, Optional, Union
+from typing import Tuple, List, Optional
 from dataclasses import dataclass
 import itertools
 
@@ -13,7 +10,7 @@ from commands.scan_obstacle_command import ScanCommand
 from grid.grid import Grid
 from grid.obstacle import Obstacle
 from misc.direction import Direction
-from misc.positioning import Position, RobotPosition
+from misc.positioning import Position
 from path_finding.modified_a_star import ModifiedAStar
 from path_finding.weighted_a_star import WeightedAStar
 

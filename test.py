@@ -1,5 +1,3 @@
-# Cleaned
-
 import constants
 from grid.grid import Grid
 from grid.obstacle import Obstacle

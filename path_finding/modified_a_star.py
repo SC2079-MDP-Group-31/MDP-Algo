@@ -1,18 +1,14 @@
 import heapq
 import math
-from queue import PriorityQueue
 from typing import List, Tuple
 
-import constants as constants
 from commands.command import Command
 from commands.go_straight_command import StraightCommand
 from commands.turn_command import TurnCommand
 from grid.grid import Grid
-from grid.grid_cell import GridCell
 from misc.direction import Direction
 from misc.positioning import RobotPosition
 from misc.type_of_turn import TypeOfTurn
-
 
 class ModifiedAStar:
     def __init__(self, grid, brain, start: RobotPosition, end: RobotPosition, yolo):

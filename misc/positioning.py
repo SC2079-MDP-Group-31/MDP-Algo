@@ -1,5 +1,3 @@
-# Cleaned
-
 import constants
 
 from .direction import Direction

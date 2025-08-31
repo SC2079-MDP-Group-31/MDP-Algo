@@ -1,5 +1,3 @@
-# Cleaned
-
 import sys
 from copy import deepcopy
 import pygame

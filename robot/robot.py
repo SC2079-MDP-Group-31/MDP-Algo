@@ -1,13 +1,10 @@
-# Cleaned
-
 import datetime
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 import pygame
 
 import constants as constants
 import misc.timer as timer
-from commands.command import Command
 from commands.go_straight_command import StraightCommand
 from commands.turn_command import TurnCommand
 from misc.direction import Direction

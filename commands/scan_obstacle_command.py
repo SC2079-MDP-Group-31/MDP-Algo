@@ -1,5 +1,3 @@
-# Cleaned
-
 from commands.command import Command
 
 

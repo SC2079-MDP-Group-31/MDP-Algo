@@ -1,9 +1,5 @@
-# Cleaned
-
-import math
 from typing import Dict, Tuple
 
-import constants as constants
 from commands.command import Command
 from misc.direction import Direction
 from misc.positioning import Position, RobotPosition

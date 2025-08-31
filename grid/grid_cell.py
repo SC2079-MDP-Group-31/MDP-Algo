@@ -1,5 +1,3 @@
-# Cleaned
-
 import constants
 from misc.positioning import Position
 from typing import Optional

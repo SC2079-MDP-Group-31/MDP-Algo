@@ -1,9 +1,7 @@
-# Cleaned
-
 import socket
 import sys
 import time
-from typing import List, Union
+from typing import List
 
 import constants
 from commands.go_straight_command import StraightCommand
