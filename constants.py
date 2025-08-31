@@ -55,9 +55,9 @@ NO_OF_GRID_CELLS_PER_SIDE = GRID_LENGTH // GRID_CELL_LENGTH
 OFFSET = GRID_CELL_LENGTH // 2
 
 # Task 2 grid settings (30x10 grid)
-TASK2_LENGTH = 400
+TASK2_LENGTH = 230
 TASK2_WIDTH = 150
-TASK2_SCALING_FACTOR = 1
+TASK2_SCALING_FACTOR = 3
 
 # =============================================================================
 # ALGORITHM CONFIGURATION
