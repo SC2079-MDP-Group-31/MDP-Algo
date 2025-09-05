@@ -41,6 +41,8 @@ ROBOT_S_FACTOR = ROBOT_LENGTH / ROBOT_TURN_RADIUS
 # Time provided for scanning an obstacle image in seconds
 ROBOT_SCAN_TIME = 0.25
 
+EXECUTION_TIMEOUT_SECONDS = 20
+
 # =============================================================================
 # GRID CONFIGURATION
 # =============================================================================

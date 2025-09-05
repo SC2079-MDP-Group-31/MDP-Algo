@@ -610,33 +610,111 @@ class Simulation:
                                   [path_points[i - 1], path_points[i]], thickness)
             pygame.display.update()
 
+    # Add to constants.py
+    EXECUTION_TIMEOUT_SECONDS = 300  # 5 minutes timeout
+
+    # Modify the execution loop in simulation.py _handleMouseClick method
+    def _handleMouseClick(self, x, y, start_time_ref):
+        """Handle mouse click events"""
+        # ... existing code ...
+
+        # Start button
+        if (button_x < x < button_x + button_width) and (300 < y < 300 + button_height):
+            if not self.is_executing:
+                print("START BUTTON IS CLICKED!!! I REPEAT, START BUTTON IS CLICKED!!!")
+                self.is_executing = True
+
+                try:
+                    # Plan the path
+                    self.bot.hamiltonian.plan_path()
+                    start_time_ref[0] = time.time()
+                    self.updateTime(start_time_ref[0], start_time_ref[0])
+
+                    # Execute commands with timeout check
+                    for cmd in self.bot.hamiltonian.commands:
+                        # Check current elapsed time
+                        current_time = time.time()
+                        elapsed_time = current_time - start_time_ref[0]
+
+                        # Check for timeout
+                        if elapsed_time > constants.EXECUTION_TIMEOUT_SECONDS:
+                            print(f"TIMEOUT! Execution stopped after {elapsed_time:.1f} seconds")
+                            self.is_executing = False
+                            break
+
+                        # Check if user wants to stop (ESC key or window close)
+                        for event in pygame.event.get():
+                            if event.type == pygame.QUIT:
+                                pygame.quit()
+                                sys.exit()
+                            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                                self.is_executing = False
+                                return
+
+                        if not self.is_executing:  # Stop if execution was cancelled
+                            break
+
+                        self.parseCmd(cmd, start_time_ref[0])
+                        pygame.display.update()
+
+                except Exception as e:
+                    print(f"Error during execution: {e}")
+                finally:
+                    self.is_executing = False
+
+    # You could also add a visual timeout indicator to updateTime method
     def updateTime(self, startTime, currentTime):
-        """Update the timer display with improved styling"""
+        """Update the timer display with timeout indicator"""
         if not startTime:
             return
 
-        # Position timer below the buttons
+        # Position timer below the buttons with proper spacing
         timer_x = 630
         timer_y = 480
         timer_width = 140
         timer_height = 35
 
-        rect = pygame.Rect(timer_x, timer_y, timer_width, timer_height)
+        # Calculate elapsed and remaining time
+        elapsed_time = currentTime - startTime
+        remaining_time = max(0, constants.EXECUTION_TIMEOUT_SECONDS - elapsed_time)
 
-        # Add subtle gradient background
+        # Main timer display
+        rect = pygame.Rect(timer_x, timer_y, timer_width, timer_height)
         pygame.draw.rect(self.screen, constants.DEEP_BLUE, rect)
         pygame.draw.rect(self.screen, constants.DARK_BLUE,
                          pygame.Rect(timer_x, timer_y, timer_width, timer_height // 2))
         pygame.draw.rect(self.screen, constants.WHITE, rect, 2)
 
-        elapsed_time = currentTime - startTime
         timer_text = f"Time: {elapsed_time:.1f}s"
-
-        # Draw timer with improved font
         timer_font = pygame.font.Font("fonts/Formula1-Regular.ttf", 16)
         text_surface = timer_font.render(timer_text, True, constants.WHITE)
         text_rect = text_surface.get_rect(center=rect.center)
         self.screen.blit(text_surface, text_rect)
+
+        # Timeout display (positioned below main timer with gap)
+        timeout_y = timer_y + timer_height + 10  # 10px gap
+        timeout_rect = pygame.Rect(timer_x, timeout_y, timer_width, timer_height)
+
+        # Change color based on remaining time
+        if remaining_time < 30:  # Last 30 seconds
+            timeout_bg_color = constants.RED
+            text_color = constants.WHITE
+        elif remaining_time < 60:  # Last minute
+            timeout_bg_color = constants.YELLOW
+            text_color = constants.BLACK
+        else:
+            timeout_bg_color = constants.DARK_GRAY
+            text_color = constants.WHITE
+
+        # Draw timeout background
+        pygame.draw.rect(self.screen, timeout_bg_color, timeout_rect)
+        pygame.draw.rect(self.screen, constants.WHITE, timeout_rect, 2)
+
+        # Draw timeout text
+        timeout_text = f"Timeout: {remaining_time:.0f}s"
+        timeout_surface = timer_font.render(timeout_text, True, text_color)
+        timeout_text_rect = timeout_surface.get_rect(center=timeout_rect.center)
+        self.screen.blit(timeout_surface, timeout_text_rect)
 
     def updatingDisplay(self, start=None):
         """Update the display with current state"""
@@ -720,7 +798,7 @@ class Simulation:
 
         # Start button
         if (button_x < x < button_x + button_width) and (300 < y < 300 + button_height):
-            if not self.is_executing:  # Only allow if not currently executing
+            if not self.is_executing:
                 print("START BUTTON IS CLICKED!!! I REPEAT, START BUTTON IS CLICKED!!!")
                 self.is_executing = True
 
@@ -730,8 +808,18 @@ class Simulation:
                     start_time_ref[0] = time.time()
                     self.updateTime(start_time_ref[0], start_time_ref[0])
 
-                    # Execute commands
+                    # Execute commands with timeout check
                     for cmd in self.bot.hamiltonian.commands:
+                        # Check current elapsed time
+                        current_time = time.time()
+                        elapsed_time = current_time - start_time_ref[0]
+
+                        # Check for timeout
+                        if elapsed_time > constants.EXECUTION_TIMEOUT_SECONDS:
+                            print(f"TIMEOUT! Execution stopped after {elapsed_time:.1f} seconds")
+                            self.is_executing = False
+                            break
+
                         # Check if user wants to stop (ESC key or window close)
                         for event in pygame.event.get():
                             if event.type == pygame.QUIT:
@@ -750,7 +838,7 @@ class Simulation:
                 except Exception as e:
                     print(f"Error during execution: {e}")
                 finally:
-                    self.is_executing = False  # Always reset execution state
+                    self.is_executing = False
             else:
                 print("Already executing! Please wait or press RESET to stop.")
 
