@@ -175,6 +175,26 @@ class TurnCommand(Command):
 
         Returns:
             Command message string
+        
+        
+        Possible command messages:
+        # Left forward turns
+        #   SMALL:  "KF001"  (turn left small forward)
+        #   MEDIUM: "LF090"  (turn left medium forward)
+        #   LARGE:  "LF180"  (turn left large forward)
+        # Left reverse turns
+        #   SMALL:  "KB001"  (turn left small reverse)
+        #   MEDIUM: "LB090"  (turn left medium reverse)
+        #   LARGE:  "LB180"  (turn left large reverse)
+        # Right forward turns
+        #   SMALL:  "JF001"  (turn right small forward)
+        #   MEDIUM: "RF090"  (turn right medium forward)
+        #   LARGE:  "RF180"  (turn right large forward)
+        # Right reverse turns
+        #   SMALL:  "JB001"  (turn right small reverse)
+        #   MEDIUM: "RB090"  (turn right medium reverse)
+        #   LARGE:  "RB180"  (turn right large reverse)
+        # If configuration is not recognized, returns "UNKNOWN_COMMAND".
         """
         command_key = (self.left, self.right, self.reverse, self.type_of_turn)
         return self.COMMAND_MESSAGES.get(command_key, "UNKNOWN_COMMAND")
