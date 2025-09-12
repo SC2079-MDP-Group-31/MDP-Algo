@@ -154,7 +154,7 @@ class Main:
 
         # Convert to commands and send to RPI
         print("Sending list of commands to RPi...")
-        self.commands = app.robot.convert_all_commands()
+        self.commands = app.robot.convert_commands_to_messages()
         print(f"Commands to send: {self.commands}")
 
         if self.commands:
