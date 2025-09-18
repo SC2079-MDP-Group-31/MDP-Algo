@@ -18,7 +18,14 @@ class Simulation:
     def __init__(self):
         pygame.init()
         self.running = True
-        self.font = pygame.font.Font("fonts/Formula1-Regular.ttf", 20)
+        
+        # Fix font initialization - use system font as fallback
+        try:
+            self.font = pygame.font.Font("fonts/Formula1-Regular.ttf", 20)
+        except (pygame.error, FileNotFoundError):
+            print("Font file not found, using system font")
+            self.font = pygame.font.SysFont("Arial", 20)
+        
         self.screen = pygame.display.set_mode((800, 650), pygame.RESIZABLE)
         self.clock = None
         self.bot = None
@@ -331,13 +338,32 @@ class Simulation:
                 img = pygame.image.load(image_path).convert()
                 is_hovered = (self.hovered_movement == button_name)
                 self.drawImage(img, x_pos, y_pos, constants.GREY, size, size, is_hovered)
-            except pygame.error:
-                # Draw a placeholder rectangle if image not found
+            except (pygame.error, FileNotFoundError):
+                # Draw a placeholder rectangle with text if image not found
                 is_hovered = (self.hovered_movement == button_name)
                 bg_color = constants.LIGHT_BLUE if is_hovered else constants.GREY
                 rect = pygame.Rect(x_pos, y_pos, size, size)
                 pygame.draw.rect(self.screen, bg_color, rect)
                 pygame.draw.rect(self.screen, constants.BLACK, rect, 2)
+                
+                # Add text label for the button
+                button_labels = {
+                    "forward": "↑",
+                    "backward": "↓", 
+                    "turn_right": "↱",
+                    "turn_left": "↰",
+                    "reverse_right": "↳",
+                    "reverse_left": "↲",
+                    "northeast": "↗",
+                    "northwest": "↖",
+                    "southeast": "↘",
+                    "southwest": "↙"
+                }
+                
+                label = button_labels.get(button_name, "?")
+                text_surface = self.font.render(label, True, constants.BLACK)
+                text_rect = text_surface.get_rect(center=rect.center)
+                self.screen.blit(text_surface, text_rect)
 
     def _checkBounds(self, new_x, new_y, gridSize, cellSize):
         """Check if new position is within grid bounds"""
@@ -686,7 +712,10 @@ class Simulation:
         pygame.draw.rect(self.screen, constants.WHITE, rect, 2)
 
         timer_text = f"Time: {elapsed_time:.1f}s"
-        timer_font = pygame.font.Font("fonts/Formula1-Regular.ttf", 16)
+        try:
+            timer_font = pygame.font.Font("fonts/Formula1-Regular.ttf", 16)
+        except (pygame.error, FileNotFoundError):
+            timer_font = pygame.font.SysFont("Arial", 16)
         text_surface = timer_font.render(timer_text, True, constants.WHITE)
         text_rect = text_surface.get_rect(center=rect.center)
         self.screen.blit(text_surface, text_rect)
