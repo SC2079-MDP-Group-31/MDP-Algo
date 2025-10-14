@@ -18,6 +18,7 @@ class WeightedAStar(ModifiedAStar):
     # Movement weight constants
     WEIGHT_STRAIGHT = 0
     WEIGHT_SMALL_TURN = 10
+    WEIGHT_GRANDE45_TURN = 15  # TODO: tune empirically
     WEIGHT_MEDIUM_TURN = 20
     WEIGHT_LARGE_TURN = 30
     DEFAULT_WEIGHT = 100
@@ -44,6 +45,7 @@ class WeightedAStar(ModifiedAStar):
         # Movement weights - can be adjusted for different behaviors
         self.weight_straight = self.WEIGHT_STRAIGHT
         self.weight_small_turn = self.WEIGHT_SMALL_TURN
+        self.weight_grande45_turn = self.WEIGHT_GRANDE45_TURN
         self.weight_medium_turn = self.WEIGHT_MEDIUM_TURN
         self.weight_large_turn = self.WEIGHT_LARGE_TURN
 
@@ -86,6 +88,8 @@ class WeightedAStar(ModifiedAStar):
             turn_type = command.get_type_of_turn()
             if turn_type == TypeOfTurn.SMALL:
                 return self.weight_small_turn
+            elif turn_type == TypeOfTurn.GRANDE45:
+                return self.weight_grande45_turn
             elif turn_type == TypeOfTurn.MEDIUM:
                 return self.weight_medium_turn
             elif turn_type == TypeOfTurn.LARGE:

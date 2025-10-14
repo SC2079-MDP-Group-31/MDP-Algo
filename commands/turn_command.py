@@ -10,6 +10,7 @@ class TurnCommand(Command):
     # Time constants for different turn types
     TURN_TIMES = {
         TypeOfTurn.SMALL: 10,  # SOME VALUE TO BE EMPIRICALLY DETERMINED
+        TypeOfTurn.GRANDE45: 15,  # TODO: tune empirically
         TypeOfTurn.MEDIUM: 20,  # SOME VALUE TO BE EMPIRICALLY DETERMINED
         TypeOfTurn.LARGE: 30,  # SOME VALUE TO BE EMPIRICALLY DETERMINED
     }
@@ -40,6 +41,35 @@ class TurnCommand(Command):
             Direction.LEFT: (40, 10, None),
             Direction.RIGHT: (-40, -10, None),
             Direction.BOTTOM: (-10, 40, None),
+        },
+    }
+
+    GRANDE45_TURN_DELTAS = {
+        # (left, right, reverse): {direction: (dx, dy, new_direction)}
+        # 45-degree turns - intermediate between SMALL and MEDIUM
+        (True, False, False): {  # Left forward 45°
+            Direction.TOP: (-20, 30, None),  # TODO: tune empirically
+            Direction.LEFT: (-30, -20, None),
+            Direction.RIGHT: (30, 20, None),
+            Direction.BOTTOM: (20, -30, None),
+        },
+        (False, True, False): {  # Right forward 45°
+            Direction.TOP: (20, 30, None),  # TODO: tune empirically
+            Direction.LEFT: (-30, 20, None),
+            Direction.RIGHT: (30, -20, None),
+            Direction.BOTTOM: (-20, -30, None),
+        },
+        (True, False, True): {  # Left reverse 45°
+            Direction.TOP: (-20, -30, None),  # TODO: tune empirically
+            Direction.LEFT: (30, -20, None),
+            Direction.RIGHT: (-30, 20, None),
+            Direction.BOTTOM: (20, 30, None),
+        },
+        (False, True, True): {  # Right reverse 45°
+            Direction.TOP: (20, -30, None),  # TODO: tune empirically
+            Direction.LEFT: (30, 20, None),
+            Direction.RIGHT: (-30, -20, None),
+            Direction.BOTTOM: (-20, 30, None),
         },
     }
 
@@ -74,15 +104,19 @@ class TurnCommand(Command):
     COMMAND_MESSAGES = {
         # (left, right, reverse, turn_type): message
         (True, False, False, TypeOfTurn.SMALL): "KF001",  # turn left small forward
+        (True, False, False, TypeOfTurn.GRANDE45): "LF045",  # turn left 45° forward
         (True, False, False, TypeOfTurn.MEDIUM): "LF090",  # turn left medium forward
         (True, False, False, TypeOfTurn.LARGE): "LF180",  # turn left large forward
         (True, False, True, TypeOfTurn.SMALL): "KB001",  # turn left small reverse
+        (True, False, True, TypeOfTurn.GRANDE45): "LB045",  # turn left 45° reverse
         (True, False, True, TypeOfTurn.MEDIUM): "LB090",  # turn left medium reverse
         (True, False, True, TypeOfTurn.LARGE): "LB180",  # turn left large reverse
         (False, True, False, TypeOfTurn.SMALL): "JF001",  # turn right small forward
+        (False, True, False, TypeOfTurn.GRANDE45): "RF045",  # turn right 45° forward
         (False, True, False, TypeOfTurn.MEDIUM): "RF090",  # turn right medium forward
         (False, True, False, TypeOfTurn.LARGE): "RF180",  # turn right large forward
         (False, True, True, TypeOfTurn.SMALL): "JB001",  # turn right small reverse
+        (False, True, True, TypeOfTurn.GRANDE45): "RB045",  # turn right 45° reverse
         (False, True, True, TypeOfTurn.MEDIUM): "RB090",  # turn right medium reverse
         (False, True, True, TypeOfTurn.LARGE): "RB180",  # turn right large reverse
     }
@@ -136,6 +170,8 @@ class TurnCommand(Command):
 
         if self.type_of_turn == TypeOfTurn.SMALL:
             deltas = self.SMALL_TURN_DELTAS
+        elif self.type_of_turn == TypeOfTurn.GRANDE45:
+            deltas = self.GRANDE45_TURN_DELTAS
         elif self.type_of_turn == TypeOfTurn.MEDIUM:
             deltas = self.MEDIUM_TURN_DELTAS
         else:  # TypeOfTurn.LARGE
@@ -179,21 +215,25 @@ class TurnCommand(Command):
         
         Possible command messages:
         # Left forward turns
-        #   SMALL:  "KF001"  (turn left small forward)
-        #   MEDIUM: "LF090"  (turn left medium forward)
-        #   LARGE:  "LF180"  (turn left large forward)
+        #   SMALL:    "KF001"  (turn left small forward)
+        #   GRANDE45: "LF045"  (turn left 45° forward)
+        #   MEDIUM:   "LF090"  (turn left medium forward)
+        #   LARGE:    "LF180"  (turn left large forward)
         # Left reverse turns
-        #   SMALL:  "KB001"  (turn left small reverse)
-        #   MEDIUM: "LB090"  (turn left medium reverse)
-        #   LARGE:  "LB180"  (turn left large reverse)
+        #   SMALL:    "KB001"  (turn left small reverse)
+        #   GRANDE45: "LB045"  (turn left 45° reverse)
+        #   MEDIUM:   "LB090"  (turn left medium reverse)
+        #   LARGE:    "LB180"  (turn left large reverse)
         # Right forward turns
-        #   SMALL:  "JF001"  (turn right small forward)
-        #   MEDIUM: "RF090"  (turn right medium forward)
-        #   LARGE:  "RF180"  (turn right large forward)
+        #   SMALL:    "JF001"  (turn right small forward)
+        #   GRANDE45: "RF045"  (turn right 45° forward)
+        #   MEDIUM:   "RF090"  (turn right medium forward)
+        #   LARGE:    "RF180"  (turn right large forward)
         # Right reverse turns
-        #   SMALL:  "JB001"  (turn right small reverse)
-        #   MEDIUM: "RB090"  (turn right medium reverse)
-        #   LARGE:  "RB180"  (turn right large reverse)
+        #   SMALL:    "JB001"  (turn right small reverse)
+        #   GRANDE45: "RB045"  (turn right 45° reverse)
+        #   MEDIUM:   "RB090"  (turn right medium reverse)
+        #   LARGE:    "RB180"  (turn right large reverse)
         # If configuration is not recognized, returns "UNKNOWN_COMMAND".
         """
         command_key = (self.left, self.right, self.reverse, self.type_of_turn)

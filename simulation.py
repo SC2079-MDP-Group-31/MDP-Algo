@@ -787,6 +787,10 @@ class Simulation:
                 (TypeOfTurn.MEDIUM, False, True, False): self.turnLeft,
                 (TypeOfTurn.MEDIUM, True, False, True): self.reverseTurnRight,
                 (TypeOfTurn.MEDIUM, False, True, True): self.reverseTurnLeft,
+                (TypeOfTurn.GRANDE45, True, False, False): self.moveNorthEast,  # TODO: implement 45° turn visual
+                (TypeOfTurn.GRANDE45, False, True, False): self.moveNorthWest,  # TODO: implement 45° turn visual
+                (TypeOfTurn.GRANDE45, True, False, True): self.moveSouthEast,   # TODO: implement 45° turn visual
+                (TypeOfTurn.GRANDE45, False, True, True): self.moveSouthWest,   # TODO: implement 45° turn visual
                 (TypeOfTurn.SMALL, True, False, False): self.moveNorthEast,
                 (TypeOfTurn.SMALL, False, True, False): self.moveNorthWest,
                 (TypeOfTurn.SMALL, True, False, True): self.moveSouthEast,

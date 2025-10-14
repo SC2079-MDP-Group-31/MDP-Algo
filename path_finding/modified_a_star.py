@@ -47,12 +47,16 @@ class ModifiedAStar:
         turn_penalty = 100
         turn_commands = [  # type of turn, Left, Right, Reverse
             TurnCommand(TypeOfTurn.SMALL, True, False, False),  # L SMALL turn, forward
+            TurnCommand(TypeOfTurn.GRANDE45, True, False, False),  # L 45° turn, forward
             TurnCommand(TypeOfTurn.MEDIUM, True, False, False),  # L MEDIUM turn, forward
             TurnCommand(TypeOfTurn.SMALL, True, False, True),  # L SMALL turn, reverse
+            TurnCommand(TypeOfTurn.GRANDE45, True, False, True),  # L 45° turn, reverse
             TurnCommand(TypeOfTurn.MEDIUM, True, False, True),  # L MEDIUM turn, reverse
             TurnCommand(TypeOfTurn.SMALL, False, True, False),  # R SMALL turn, forward
+            TurnCommand(TypeOfTurn.GRANDE45, False, True, False),  # R 45° turn, forward
             TurnCommand(TypeOfTurn.MEDIUM, False, True, False),  # R MEDIUM turn, forward
             TurnCommand(TypeOfTurn.SMALL, False, True, True),  # R SMALL turn, reverse
+            TurnCommand(TypeOfTurn.GRANDE45, False, True, True),  # R 45° turn, reverse
             TurnCommand(TypeOfTurn.MEDIUM, False, True, True),  # R MEDIUM turn, reverse
         ]
 
@@ -63,6 +67,8 @@ class ModifiedAStar:
             if after:
                 if c.get_type_of_turn == TypeOfTurn.SMALL:
                     turn_penalty = 100 if not self.yolo else 20
+                elif c.get_type_of_turn == TypeOfTurn.GRANDE45:
+                    turn_penalty = 75 if not self.yolo else 10  # TODO: tune empirically
                 elif c.get_type_of_turn == TypeOfTurn.MEDIUM:
                     turn_penalty = 50 if not self.yolo else 0
                 neighbours.append((after, p, turn_penalty, c))
