@@ -1,5 +1,6 @@
 import sys
 from copy import deepcopy
+from datetime import datetime
 import pygame
 import constants
 from misc.direction import Direction
@@ -20,6 +21,10 @@ class Simulation:
         self.obstacles = []
         self.currentPos = (0, 0, Direction.TOP)
 
+        # Logging configuration
+        self.verbose = True
+        self._last_logged_pos = None
+
         # Add hover effect state management
         self.hovered_button = None
         self.last_mouse_pos = (0, 0)
@@ -31,9 +36,30 @@ class Simulation:
         pygame.display.set_caption("Vroom Vroom Simulation - Enhanced")
         self.screen.fill(constants.BLACK)
 
+    def _log(self, msg: str):
+        """Helper method to print timestamped log messages."""
+        if self.verbose:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            print(f"[{timestamp}] {msg}")
+
+    def _pos_str(self, pos=None):
+        """Format position as grid=(r,c) dir=XYZ."""
+        if pos is None:
+            pos = self.currentPos
+        return f"grid=({pos[0]},{pos[1]}) dir={pos[2].name}"
+
+    def _world_pos_str(self):
+        """Format current position as world coordinates."""
+        # Convert grid position back to world coordinates
+        world_x = self.currentPos[1] * 10  # col * 10
+        world_y = self.currentPos[0] * 10  # row * 10
+        return f"world=({world_x},{world_y}) dir={self.currentPos[2].name}"
+
     def reset(self, bot):
         """Reset the simulation to initial state."""
-        print("Resetting Task 2 simulation...")
+        old_pos_str = self._pos_str() if hasattr(self, 'currentPos') else "unknown"
+        old_world_str = self._world_pos_str() if hasattr(self, 'currentPos') else "unknown"
+        
         self.screen.fill(constants.BLACK)
 
         # Set robot to proper starting position (bottom-left area of Task 2 grid)
@@ -42,16 +68,17 @@ class Simulation:
         start_world_y = 70  # World units from bottom
         start_direction = Direction.TOP
 
-        print(f"Resetting robot to world position: ({start_world_x}, {start_world_y})")
-
         # Convert to display coordinates for current position tracking
         start_grid_x = start_world_x // 10  # Convert to grid cells (37)
         start_grid_y = start_world_y // 10  # Convert to grid cells (7)
 
-        print(f"Resetting robot to grid position: ({start_grid_x}, {start_grid_y})")
-
         # Set the display position
         self.currentPos = (start_grid_x, start_grid_y, start_direction)
+        
+        new_pos_str = self._pos_str()
+        new_world_str = self._world_pos_str()
+        
+        self._log(f"RESET → {new_pos_str} | {new_world_str}")
 
         # Set the bot's actual position using Task 2 method
         self.bot.set_position_task2(start_grid_x, start_grid_y, start_direction)
@@ -255,12 +282,13 @@ class Simulation:
     def _check_collision(self, check_positions):
         """Check if any of the given positions collide with obstacles."""
         for x, y in check_positions:
+            self._log(f"COLLISION-CHECK at grid=({x},{y})")
             for obstacle in self.obstacles:
                 obstacle_y = (
                                      constants.TASK2_LENGTH - constants.GRID_CELL_LENGTH * 5 - obstacle.position.y) // constants.GRID_CELL_LENGTH
                 obstacle_x = obstacle.position.x // constants.GRID_CELL_LENGTH
                 if x == obstacle_y and y == obstacle_x:
-                    print("COLLISION!")
+                    self._log(f"COLLISION! obstacle at grid=({x},{y})")
                     return True
         return False
 
@@ -292,12 +320,19 @@ class Simulation:
 
     def _execute_movement(self, new_position, cell_size):
         """Execute the movement if valid."""
+        old_pos_str = self._pos_str()
+        new_pos_str = self._pos_str(new_position)
+        self._log(f"MOVE from {old_pos_str} to {new_pos_str}")
+        
         self.drawRobot(self.currentPos, cell_size, constants.GREEN, constants.GREEN, constants.GREEN)
         self.bot.set_position_task2(new_position[0], new_position[1], new_position[2])
         return 1
 
     def moveForward(self, grid_length, grid_width, cell_size):
         """Move robot forward in current direction."""
+        # Log intent
+        self._log(f"INTENT: forward 1 step from {self._pos_str()}")
+        
         collision_positions = self._get_collision_positions_forward()
         if self._check_collision(collision_positions):
             return -1
@@ -317,6 +352,9 @@ class Simulation:
 
     def moveBackward(self, grid_length, grid_width, cell_size):
         """Move robot backward (opposite to current direction)."""
+        # Log intent
+        self._log(f"INTENT: backward 1 step from {self._pos_str()}")
+        
         collision_positions = self._get_collision_positions_backward()
         if self._check_collision(collision_positions):
             return -1
@@ -366,6 +404,12 @@ class Simulation:
         if not turn_offset:
             return -1
 
+        # Log turn with offset and direction change
+        dx = -(turn_offset[1] // 10)
+        dy = turn_offset[0] // 10
+        old_pos_str = self._pos_str()
+        self._log(f"TURN-RIGHT offset=({dx},{dy}) from {old_pos_str} → dir={new_direction.name}")
+
         # Simplified collision check - you may need to implement the full range checking
         new_position = (
             self.currentPos[0] - (turn_offset[1] // 10),
@@ -380,6 +424,12 @@ class Simulation:
         turn_offset, new_direction = self._get_turn_positions_and_destination('left', 'forward')
         if not turn_offset:
             return -1
+
+        # Log turn with offset and direction change
+        dx = -(turn_offset[1] // 10)
+        dy = turn_offset[0] // 10
+        old_pos_str = self._pos_str()
+        self._log(f"TURN-LEFT offset=({dx},{dy}) from {old_pos_str} → dir={new_direction.name}")
 
         new_position = (
             self.currentPos[0] - (turn_offset[1] // 10),
@@ -424,6 +474,12 @@ class Simulation:
 
         offset = diagonal_constants.get((move_type, self.currentPos[2]))
         if offset:
+            # Log diagonal movement
+            dx = -(offset[1] // 10)
+            dy = offset[0] // 10
+            old_pos_str = self._pos_str()
+            self._log(f"DIAGONAL {move_type.upper()} offset=({dx},{dy}) from {old_pos_str}")
+            
             new_position = (
                 self.currentPos[0] - (offset[1] // 10),
                 self.currentPos[1] + (offset[0] // 10),
@@ -492,11 +548,23 @@ class Simulation:
 
         # Update current position from bot
         current_pos = self.bot.get_current_pos()
-        self.currentPos = (
+        new_pos = (
             (constants.TASK2_LENGTH - constants.GRID_CELL_LENGTH - current_pos.x) // 10,
             current_pos.y // 10,
             current_pos.direction,
         )
+        
+        # Log position changes
+        if self._last_logged_pos != new_pos:
+            pos_str = self._pos_str(new_pos)
+            # Calculate world coordinates for the new position
+            world_x = new_pos[1] * 10
+            world_y = new_pos[0] * 10
+            world_str = f"world=({world_x},{world_y}) dir={new_pos[2].name}"
+            self._log(f"POSE → {pos_str} | {world_str}")
+            self._last_logged_pos = new_pos
+        
+        self.currentPos = new_pos
 
         # Draw robot and obstacles
         cell_size = constants.GRID_CELL_LENGTH * constants.TASK2_SCALING_FACTOR
@@ -506,106 +574,149 @@ class Simulation:
 
     def _execute_obstacle_maneuver(self, obstacle_direction, movement):
         """Execute obstacle avoidance maneuver."""
+        self._log(f"OBSTACLE-MANEUVER starting direction={obstacle_direction} from {self._pos_str()}")
+        
         grid_length = constants.TASK2_LENGTH * constants.TASK2_SCALING_FACTOR
         grid_width = constants.TASK2_WIDTH * constants.TASK2_SCALING_FACTOR
         cell_size = constants.GRID_CELL_LENGTH * constants.TASK2_SCALING_FACTOR
 
         if obstacle_direction == "L":
+            self._log("OBSTACLE-MANEUVER executing LEFT sequence")
             self.left(movement)
         elif obstacle_direction == "R":
+            self._log("OBSTACLE-MANEUVER executing RIGHT sequence")
             self.right(movement)
+        
+        self._log(f"OBSTACLE-MANEUVER completed at {self._pos_str()}")
 
     def left(self, movement):
         """Execute left obstacle avoidance sequence."""
+        self._log(f"LEFT-MANEUVER starting at {self._pos_str()}")
+        
         grid_length = constants.TASK2_LENGTH * constants.TASK2_SCALING_FACTOR
         grid_width = constants.TASK2_WIDTH * constants.TASK2_SCALING_FACTOR
         cell_size = constants.GRID_CELL_LENGTH * constants.TASK2_SCALING_FACTOR
 
         # Move backward 3 steps
-        for _ in range(3):
+        self._log("LEFT-MANEUVER: moving backward 3 steps")
+        for i in range(3):
+            self._log(f"LEFT-MANEUVER: backward step {i+1}/3")
             self.moveBackward(grid_length, grid_width, cell_size)
             movement["forward"] -= 1
             self.updatingTask2Display()
             pygame.display.update()
 
         # Execute turn sequence
+        self._log("LEFT-MANEUVER: executing turn sequence [L,R,R,L]")
         turn_sequence = [self.turnLeft, self.turnRight, self.turnRight, self.turnLeft]
-        for turn_func in turn_sequence:
+        turn_names = ["LEFT", "RIGHT", "RIGHT", "LEFT"]
+        for i, (turn_func, turn_name) in enumerate(zip(turn_sequence, turn_names)):
+            self._log(f"LEFT-MANEUVER: turn {i+1}/4 = {turn_name}")
             turn_func(grid_length, grid_width, cell_size)
             self.updatingTask2Display()
             pygame.display.update()
 
         movement["forward"] += 10
+        self._log(f"LEFT-MANEUVER completed at {self._pos_str()}, forward movement incremented by 10")
 
     def right(self, movement):
         """Execute right obstacle avoidance sequence."""
+        self._log(f"RIGHT-MANEUVER starting at {self._pos_str()}")
+        
         grid_length = constants.TASK2_LENGTH * constants.TASK2_SCALING_FACTOR
         grid_width = constants.TASK2_WIDTH * constants.TASK2_SCALING_FACTOR
         cell_size = constants.GRID_CELL_LENGTH * constants.TASK2_SCALING_FACTOR
 
         # Move backward 3 steps
-        for _ in range(3):
+        self._log("RIGHT-MANEUVER: moving backward 3 steps")
+        for i in range(3):
+            self._log(f"RIGHT-MANEUVER: backward step {i+1}/3")
             self.moveBackward(grid_length, grid_width, cell_size)
             movement["forward"] -= 1
             self.updatingTask2Display()
             pygame.display.update()
 
         # Execute turn sequence
+        self._log("RIGHT-MANEUVER: executing turn sequence [R,L,L,R]")
         turn_sequence = [self.turnRight, self.turnLeft, self.turnLeft, self.turnRight]
-        for turn_func in turn_sequence:
+        turn_names = ["RIGHT", "LEFT", "LEFT", "RIGHT"]
+        for i, (turn_func, turn_name) in enumerate(zip(turn_sequence, turn_names)):
+            self._log(f"RIGHT-MANEUVER: turn {i+1}/4 = {turn_name}")
             turn_func(grid_length, grid_width, cell_size)
             self.updatingTask2Display()
             pygame.display.update()
 
         movement["forward"] += 10
+        self._log(f"RIGHT-MANEUVER completed at {self._pos_str()}, forward movement incremented by 10")
 
     def _execute_second_obstacle_maneuver(self, obstacle_direction, movement):
         """Execute second obstacle avoidance maneuver."""
+        self._log(f"SECOND-OBSTACLE-MANEUVER starting direction={obstacle_direction} from {self._pos_str()}")
+        
         if obstacle_direction == "L":
+            self._log("SECOND-OBSTACLE-MANEUVER executing SECOND-LEFT sequence")
             self.secondleft(movement)
         elif obstacle_direction == "R":
+            self._log("SECOND-OBSTACLE-MANEUVER executing SECOND-RIGHT sequence")
             self.secondright(movement)
+            
+        self._log(f"SECOND-OBSTACLE-MANEUVER completed at {self._pos_str()}")
 
     def secondleft(self, movement):
         """Execute second left obstacle avoidance sequence."""
+        self._log(f"SECOND-LEFT starting at {self._pos_str()}")
+        
         grid_length = constants.TASK2_LENGTH * constants.TASK2_SCALING_FACTOR
         grid_width = constants.TASK2_WIDTH * constants.TASK2_SCALING_FACTOR
         cell_size = constants.GRID_CELL_LENGTH * constants.TASK2_SCALING_FACTOR
 
         # Initial backward movement
-        for _ in range(2):
+        self._log("SECOND-LEFT: moving backward 2 steps")
+        for i in range(2):
+            self._log(f"SECOND-LEFT: backward step {i+1}/2")
             self.moveBackward(grid_length, grid_width, cell_size)
             movement["forward"] -= 1
             self.updatingTask2Display()
             pygame.display.update()
 
         movement["forward"] -= 1
+        self._log("SECOND-LEFT: decremented forward movement by 1")
 
         # Turn sequence
+        self._log("SECOND-LEFT: executing turn sequence [L,R,R]")
+        self._log("SECOND-LEFT: turn 1/3 = LEFT")
         self.turnLeft(grid_length, grid_width, cell_size)
         self.updatingTask2Display()
         pygame.display.update()
 
+        self._log("SECOND-LEFT: turn 2/3 = RIGHT")
         self.turnRight(grid_length, grid_width, cell_size)
         self.updatingTask2Display()
         pygame.display.update()
 
+        self._log("SECOND-LEFT: turn 3/3 = RIGHT")
         self.turnRight(grid_length, grid_width, cell_size)
         self.updatingTask2Display()
         pygame.display.update()
 
         # Move forward 5 steps
-        for _ in range(5):
+        self._log("SECOND-LEFT: moving forward 5 steps")
+        for i in range(5):
+            self._log(f"SECOND-LEFT: forward step {i+1}/5")
             self.moveForward(grid_length, grid_width, cell_size)
             self.updatingTask2Display()
             pygame.display.update()
 
+        self._log("SECOND-LEFT: final turn RIGHT")
         self.turnRight(grid_length, grid_width, cell_size)
         self.updatingTask2Display()
         pygame.display.update()
 
         # Move forward by remaining movement
-        for _ in range(movement["forward"]):
+        remaining_moves = movement["forward"]
+        self._log(f"SECOND-LEFT: moving forward {remaining_moves} steps (remaining movement)")
+        for i in range(movement["forward"]):
+            self._log(f"SECOND-LEFT: remaining forward step {i+1}/{remaining_moves}")
             self.moveForward(grid_length, grid_width, cell_size)
             self.updatingTask2Display()
             pygame.display.update()
@@ -633,19 +744,65 @@ class Simulation:
             pygame.display.update()
 
         movement["forward"] -= 1
+        self._log("SECOND-RIGHT: decremented forward movement by 1")
 
         # Turn sequence (opposite of left)
+        self._log("SECOND-RIGHT: executing turn sequence [R,L,L]")
+        self._log("SECOND-RIGHT: turn 1/3 = RIGHT")
         self.turnRight(grid_length, grid_width, cell_size)
         self.updatingTask2Display()
         pygame.display.update()
 
+        self._log("SECOND-RIGHT: turn 2/3 = LEFT")
         self.turnLeft(grid_length, grid_width, cell_size)
         self.updatingTask2Display()
         pygame.display.update()
 
+        self._log("SECOND-RIGHT: turn 3/3 = LEFT")
         self.turnLeft(grid_length, grid_width, cell_size)
         self.updatingTask2Display()
         pygame.display.update()
+
+        # Move forward 5 steps
+        self._log("SECOND-RIGHT: moving forward 5 steps")
+        for i in range(5):
+            self._log(f"SECOND-RIGHT: forward step {i+1}/5")
+            self.moveForward(grid_length, grid_width, cell_size)
+            self.updatingTask2Display()
+            pygame.display.update()
+
+        self._log("SECOND-RIGHT: final turn LEFT")
+        self.turnLeft(grid_length, grid_width, cell_size)
+        self.updatingTask2Display()
+        pygame.display.update()
+
+        # Move forward by remaining movement
+        remaining_moves = movement["forward"]
+        self._log(f"SECOND-RIGHT: moving forward {remaining_moves} steps (remaining movement)")
+        for i in range(movement["forward"]):
+            self._log(f"SECOND-RIGHT: remaining forward step {i+1}/{remaining_moves}")
+            self.moveForward(grid_length, grid_width, cell_size)
+            self.updatingTask2Display()
+            pygame.display.update()
+        
+        self._log(f"SECOND-RIGHT completed at {self._pos_str()}")
+
+    def secondright(self, movement):
+        """Execute second right obstacle avoidance sequence."""
+        self._log(f"SECOND-RIGHT starting at {self._pos_str()}")
+        
+        grid_length = constants.TASK2_LENGTH * constants.TASK2_SCALING_FACTOR
+        grid_width = constants.TASK2_WIDTH * constants.TASK2_SCALING_FACTOR
+        cell_size = constants.GRID_CELL_LENGTH * constants.TASK2_SCALING_FACTOR
+
+        # Initial backward movement
+        self._log("SECOND-RIGHT: moving backward 2 steps")
+        for i in range(2):
+            self._log(f"SECOND-RIGHT: backward step {i+1}/2")
+            self.moveBackward(grid_length, grid_width, cell_size)
+            movement["forward"] -= 1
+            self.updatingTask2Display()
+            pygame.display.update()
 
         # Move forward 5 steps
         for _ in range(5):
@@ -713,17 +870,23 @@ class Simulation:
 
         if keys[pygame.K_UP]:
             if keys[pygame.K_RIGHT]:
+                self._log("KEY-INPUT: UP+RIGHT → turn right")
                 self.turnRight(grid_length, grid_width, cell_size)
             elif keys[pygame.K_LEFT]:
+                self._log("KEY-INPUT: UP+LEFT → turn left")
                 self.turnLeft(grid_length, grid_width, cell_size)
             else:
+                self._log("KEY-INPUT: UP → move forward")
                 self.moveForward(grid_length, grid_width, cell_size)
         elif keys[pygame.K_DOWN]:
             if keys[pygame.K_RIGHT]:
+                self._log("KEY-INPUT: DOWN+RIGHT → reverse turn right")
                 self.reverseTurnRight(grid_length, grid_width, cell_size)
             elif keys[pygame.K_LEFT]:
+                self._log("KEY-INPUT: DOWN+LEFT → reverse turn left")
                 self.reverseTurnLeft(grid_length, grid_width, cell_size)
             else:
+                self._log("KEY-INPUT: DOWN → move backward")
                 self.moveBackward(grid_length, grid_width, cell_size)
 
     def _handle_diagonal_keys(self, event):
@@ -733,21 +896,27 @@ class Simulation:
         cell_size = constants.GRID_CELL_LENGTH * constants.TASK2_SCALING_FACTOR
 
         diagonal_moves = {
-            pygame.K_e: self.moveNorthEast,
-            pygame.K_q: self.moveNorthWest,
-            pygame.K_d: self.moveSouthEast,
-            pygame.K_a: self.moveSouthWest,
+            pygame.K_e: ("NorthEast", self.moveNorthEast),
+            pygame.K_q: ("NorthWest", self.moveNorthWest),
+            pygame.K_d: ("SouthEast", self.moveSouthEast),
+            pygame.K_a: ("SouthWest", self.moveSouthWest),
         }
 
-        move_func = diagonal_moves.get(event.key)
-        if move_func:
+        if event.key in diagonal_moves:
+            direction, move_func = diagonal_moves[event.key]
+            self._log(f"KEY-INPUT: {pygame.key.name(event.key).upper()} → diagonal move {direction}")
             move_func(grid_length, grid_width, cell_size)
 
     def runTask2Simulation(self, bot):
         """Main simulation loop for Task 2."""
+        self._log("=== TASK2 SIMULATION STARTING ===")
+        self._log(f"Initial position: {self._pos_str()}")
+        
         self.bot = deepcopy(bot)
         self.clock = pygame.time.Clock()
         self.obstacles = self.bot.hamiltonian.grid.obstacles
+        
+        self._log(f"Loaded {len(self.obstacles)} obstacles from grid")
 
         while True:
             self.updatingTask2Display()
@@ -760,6 +929,7 @@ class Simulation:
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    self._log("=== TASK2 SIMULATION ENDING (QUIT) ===")
                     pygame.quit()
                     sys.exit()
 
@@ -787,7 +957,9 @@ class Simulation:
 
         if button_bounds[0] < x < button_bounds[1]:
             if 500 < y < 500 + constants.BUTTON_WIDTH:
+                self._log("MOUSE-CLICK: START BUTTON CLICKED at position ({x},{y}) - starting Task2 algorithm")
                 print("START BUTTON IS CLICKED!!! I REPEAT, START BUTTON IS CLICKED!!!")
+                self._log(f"TASK2-ALGO starting with direction={self.direction}")
                 self.task2Algo(self.direction)
             elif 450 < y < 450 + constants.BUTTON_WIDTH:
                 print("RESET BUTTON CLICKED!")
